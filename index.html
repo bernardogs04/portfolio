@@ -1,0 +1,1708 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Portfólio Overworld</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+/* Layout: tela inicial em tela cheia, cena de apresentação e, depois, uma lista de abas à esquerda (estilo menu de jogo) com o painel da aba à direita. Um canvas fixo desenha o mundo (colinas, chão, personagem). */
+:root {
+  /* céu (dia) */
+  --sky-top: #6fb1ff;
+  --sky-bot: #bfe3ff;
+  --hero: #0b1f33;
+  --hero-sh: #9fd0ff;
+  /* GUI */
+  --panel: #c6c6c6;
+  --panel-hi: #ffffff;
+  --panel-lo: #555555;
+  --ink: #1f1f1f;
+  --ink-soft: #4a4a4a;
+  --slot: #8b8b8b;
+  --slot-hi: #ffffff;
+  --slot-lo: #373737;
+  --outline: #000000;
+  --sel: #ffffff;
+  --btn: #707070;
+  --btn-hover: #5568c0;
+  /* mundo (canvas) */
+  --grass: #5fa83a;
+  --grass-dark: #4a8a2c;
+  --dirt: #8b5a3c;
+  --dirt-dark: #74492f;
+  --hill-far: #86b9a6;
+  --hill-near: #4f9140;
+  --leaf: #2f7a2a;
+  --trunk: #6b4a2b;
+  --cloud: #ffffff;
+  --sun: #ffe14d;
+  --sun-core: #fff5a8;
+  --moon: #e6e6f0;
+  --moon-dark: #b9b9c9;
+  /* itens fixos */
+  --tip-bg: #100010;
+  --tip-bd: #2a0a5c;
+  --sign: #a67c52;
+  --sign-hi: #c19a6b;
+  --sign-lo: #6f4e2c;
+  --sign-ink: #2b1a0c;
+  --win: #2f7d32;
+  --draw: #6b6b6b;
+  --loss: #b3382c;
+  --focus: #ffd23f;
+  --font-d: 'Press Start 2P', ui-monospace, 'Courier New', monospace;
+  --font-b: 'VT323', ui-monospace, 'Courier New', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sky-top: #05070f; --sky-bot: #1a2347; --hero: #ffffff; --hero-sh: #000000;
+    --panel: #3b3b40; --panel-hi: #6b6b73; --panel-lo: #1a1a1d; --ink: #ececec; --ink-soft: #b5b5bd;
+    --slot: #2a2a2e; --slot-hi: #55555d; --slot-lo: #111113; --btn: #4a4a52;
+    --grass: #2f6b2a; --grass-dark: #255420; --dirt: #5a3b25; --dirt-dark: #4a301e;
+    --hill-far: #101a38; --hill-near: #1b4a2f; --leaf: #16401f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --sky-top: #05070f; --sky-bot: #1a2347; --hero: #ffffff; --hero-sh: #000000;
+  --panel: #3b3b40; --panel-hi: #6b6b73; --panel-lo: #1a1a1d; --ink: #ececec; --ink-soft: #b5b5bd;
+  --slot: #2a2a2e; --slot-hi: #55555d; --slot-lo: #111113; --btn: #4a4a52;
+  --grass: #2f6b2a; --grass-dark: #255420; --dirt: #5a3b25; --dirt-dark: #4a301e;
+  --hill-far: #101a38; --hill-near: #1b4a2f; --leaf: #16401f;
+  color-scheme: dark;
+}
+
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; }
+html.locked, html.locked body { overflow: hidden; overscroll-behavior: none; touch-action: none; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  background: var(--sky-bot);
+  background-image: linear-gradient(var(--sky-top), var(--sky-bot));
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--font-b);
+  font-size: 22px;
+  line-height: 1.25;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 140px;
+}
+body::before {
+  content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px);
+  z-index: 30; background: var(--sky-top);
+}
+* { box-sizing: border-box; }
+#bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; display: block; }
+.wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+/* ---------- componentes de GUI ---------- */
+.gui {
+  background: var(--panel); color: var(--ink);
+  border: 4px solid var(--outline);
+  box-shadow: inset 4px 4px 0 var(--panel-hi), inset -4px -4px 0 var(--panel-lo);
+  padding: 24px;
+}
+.gui > h2 {
+  font: 15px/1.5 var(--font-d); margin: 0 0 20px; padding-bottom: 14px;
+  border-bottom: 4px solid var(--panel-lo); text-wrap: balance;
+}
+.gui > h2.sub { margin-top: 36px; }
+.inset {
+  background: var(--slot);
+  box-shadow: inset 3px 3px 0 var(--slot-lo), inset -3px -3px 0 var(--slot-hi);
+  padding: 18px; color: var(--ink);
+}
+.btn {
+  display: inline-block; cursor: pointer; text-decoration: none; color: #fff;
+  font: 12px/1.4 var(--font-d); padding: 13px 16px; background: var(--btn);
+  border: 3px solid #000; text-shadow: 2px 2px 0 #3a3a3a;
+  box-shadow: inset 3px 3px 0 rgba(255,255,255,.35), inset -3px -3px 0 rgba(0,0,0,.4);
+}
+.btn:hover { background: var(--btn-hover); }
+.btn[aria-pressed="true"], .btn[aria-selected="true"] { background: var(--btn-hover); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--btn); }
+
+/* ---------- tela inicial ---------- */
+.title, .stage { position: relative; z-index: 1; scroll-margin-top: 0; min-height: 100vh; min-height: 100svh; }
+.title {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 40px; padding-block: 72px 130px; text-align: center;
+}
+.logo { display: grid; justify-items: center; gap: 16px; max-width: 100%; }
+.wordmark {
+  margin: 0; font: clamp(26px, 8.4vw, 68px)/1.2 var(--font-d); color: #d0d0d0;
+  text-shadow: 1px 1px 0 #5a5a5a, 2px 2px 0 #5a5a5a, 3px 3px 0 #484848, 4px 4px 0 #484848,
+    5px 5px 0 #353535, 6px 6px 0 #353535, 7px 7px 0 #222, 8px 8px 0 #222, 10px 12px 10px rgba(0,0,0,.35);
+  overflow-wrap: anywhere; text-wrap: balance; max-width: 100%;
+}
+.tag { margin: 0; font: 11px/1.7 var(--font-d); color: var(--hero); text-shadow: 2px 2px 0 var(--hero-sh); }
+.splash {
+  display: inline-block; transform: rotate(-4deg);
+  font: 26px/1 var(--font-b); color: #ffff55; text-shadow: 2px 2px 0 #3f3f00;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+@keyframes pulse { from { transform: rotate(-4deg) scale(1); } to { transform: rotate(-4deg) scale(1.08); } }
+.menu { display: grid; gap: 12px; width: min(380px, 100%); }
+.mbtn {
+  display: block; width: 100%; cursor: pointer; text-align: center;
+  font: 14px/1.4 var(--font-d); padding: 18px 12px; color: #e8e8e8; background: #6f6f6f;
+  border: 3px solid #000; text-shadow: 2px 2px 0 #3a3a3a;
+  box-shadow: inset 3px 3px 0 rgba(255,255,255,.35), inset -3px -3px 0 rgba(0,0,0,.45);
+}
+.mbtn:hover, .mbtn:focus-visible {
+  background: #7d7d7d; color: #ffffa0; outline: 3px solid #fff; outline-offset: -3px;
+}
+.corner { position: absolute; bottom: 88px; margin: 0; font-size: 20px; color: var(--hero); }
+.corner.l { left: 0; }
+.corner.r { right: 0; }
+
+/* ---------- cena de apresentação ---------- */
+.stage-cap { margin: 0; padding-top: 28px; font: 11px/1.6 var(--font-d); color: var(--hero); text-shadow: 2px 2px 0 var(--hero-sh); }
+.skip { position: absolute; right: 0; bottom: 92px; }
+.bubble {
+  position: fixed; z-index: 25; left: 0; top: 0; transform: translate(-50%, -100%);
+  max-width: min(300px, 80vw); background: #ffffff; color: #111111; border: 4px solid #000;
+  padding: 10px 12px; font: 22px/1.15 var(--font-b); box-shadow: inset -3px -3px 0 #bdbdbd; pointer-events: none;
+}
+.bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -12px; width: 12px; height: 12px; background: #fff;
+  border-right: 4px solid #000; border-bottom: 4px solid #000; transform: translateX(-50%) rotate(45deg);
+}
+.bubble .ghost { visibility: hidden; display: block; }
+.bubble .typed { position: absolute; left: 12px; right: 12px; top: 10px; }
+
+/* ---------- HUD / hotbar (fixa e centralizada embaixo, como no jogo) ---------- */
+.hud {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 12px) max(16px, env(safe-area-inset-left, 0px));
+  pointer-events: none; transition: transform .35s ease, opacity .35s ease;
+}
+html:not(.in-site) .hud { transform: translateY(160%); opacity: 0; }
+.hud .hotbar { pointer-events: auto; }
+.hud-name {
+  margin: 0; font: 11px/1.5 var(--font-d); color: #ffffff; text-align: center;
+  text-shadow: 2px 2px 0 #000000;
+}
+.hotbar { display: flex; gap: 4px; margin: 0; list-style: none; }
+.hotbar.gui { padding: 6px; }
+.slot {
+  position: relative; display: grid; place-items: center; text-decoration: none; color: var(--ink);
+  width: clamp(38px, 11vw, 54px); height: clamp(38px, 11vw, 54px);
+  background: var(--slot); border: 3px solid #000;
+  box-shadow: inset 3px 3px 0 var(--slot-lo), inset -3px -3px 0 var(--slot-hi);
+}
+.slot:hover { background: var(--slot-hi); }
+.slot[aria-current="true"] { outline: 4px solid var(--sel); outline-offset: 0; z-index: 1; }
+.slot[aria-current="true"]:focus-visible { outline-color: var(--focus); }
+.slot b { position: absolute; left: 3px; top: 3px; font: 8px/1 var(--font-d); color: var(--ink); }
+.slot i {
+  width: 45%; height: 45%; margin-top: 8px;
+  background: linear-gradient(var(--c1) 40%, var(--c2) 40%);
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,.4);
+}
+.hud-toggle {
+  position: fixed; z-index: 20; padding: 10px 12px; font-size: 10px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px); right: max(16px, env(safe-area-inset-right, 0px));
+}
+@media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+
+/* ---------- seções ---------- */
+main { display: grid; gap: 56px; padding-top: 56px; }
+.panel { min-width: 0; scroll-margin-top: 24px; }
+
+.about { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 24px; }
+.about p { margin: 0 0 14px; }
+.about p:last-child { margin-bottom: 0; }
+dl { margin: 0; display: grid; gap: 12px; }
+dt { font: 10px/1.4 var(--font-d); text-transform: uppercase; letter-spacing: .06em; }
+dd { margin: 4px 0 0; font-size: 22px; }
+
+.adv { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; }
+.adv li { position: relative; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 16px; }
+.adv li:not(:last-child)::before {
+  content: ""; position: absolute; left: 26px; top: 56px; bottom: -22px; width: 4px; background: var(--panel-lo);
+}
+.frame {
+  width: 56px; height: 56px; display: grid; place-items: center;
+  background: var(--slot); border: 3px solid var(--outline);
+  box-shadow: inset 3px 3px 0 var(--slot-lo), inset -3px -3px 0 var(--slot-hi);
+}
+.frame i { width: 24px; height: 24px; background: var(--c); box-shadow: inset 3px 3px 0 rgba(255,255,255,.35), inset -3px -3px 0 rgba(0,0,0,.35); }
+.adv h3 { font: 12px/1.6 var(--font-d); margin: 2px 0 4px; }
+.meta { color: var(--ink-soft); font-size: 21px; margin: 0 0 6px; }
+.adv p { margin: 0; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 16px; }
+.tip {
+  background: var(--tip-bg); color: #f0f0f0; border: 4px solid var(--tip-bd);
+  box-shadow: inset 0 0 0 3px #1c0030; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.tip h3 { font: 12px/1.6 var(--font-d); color: #fff; margin: 0; overflow-wrap: anywhere; }
+.tip .type { color: #aaaaaa; font-style: italic; margin: 0; }
+.tip p { margin: 0; }
+.tags { color: #55ffff; margin: 0; }
+.tip .links { margin-top: auto; padding-top: 6px; display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.tip .links a { color: #ffaa00; }
+
+/* ---------- baú de skills (cena 3D) ---------- */
+.chest-scene { --u: clamp(5px, 2vw, 11px); display: grid; justify-items: center; gap: 6px; margin: 0 0 8px; }
+.chest-btn { display: block; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.chest-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.chest-btn { width: 100%; }
+.chest-room {
+  position: relative; width: 100%; height: calc(var(--u) * 50); overflow: hidden; isolation: isolate;
+  border: 3px solid var(--panel-lo); box-shadow: inset 0 0 0 2px #00000055, 3px 3px 0 #0006; background: #4a4a4a;
+}
+.room-bg { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; z-index: 0; }
+.room-light {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 46% 52% at 50% 70%, rgba(255, 214, 130, .30), rgba(255, 214, 130, 0) 70%),
+    radial-gradient(ellipse 85% 85% at 50% 58%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, .55) 100%);
+}
+.room-dim { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #05070f; opacity: 0; transition: opacity .3s; }
+:root[data-theme="dark"] .room-dim { opacity: .35; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .room-dim { opacity: .35; } }
+.torch-glow {
+  position: absolute; z-index: 1; width: calc(var(--u) * 22); height: calc(var(--u) * 22); transform: translate(-50%, -50%); pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 190, 80, .55), rgba(255, 150, 40, .18) 55%, rgba(255, 150, 40, 0));
+  animation: flick 1.7s steps(2, end) infinite;
+}
+.torch-glow.b { animation-delay: -.8s; }
+@keyframes flick { 0% { opacity: .85; } 35% { opacity: 1; } 60% { opacity: .78; } 100% { opacity: .95; } }
+.chest-stage { position: absolute; inset: 0; z-index: 2; perspective: 1300px; }
+.world {
+  position: absolute; left: 50%; top: 80%; width: 0; height: 0; transform-style: preserve-3d;
+  transform: translateX(calc(var(--u) * 4.5)) rotateX(-22deg) rotateY(-30deg); transition: transform .6s ease;
+}
+.chest-scene.open .world { transform: translateX(calc(var(--u) * 4.5)) rotateX(-18deg) rotateY(-22deg); }
+.b3 { position: absolute; transform-style: preserve-3d; }
+.f3 { position: absolute; background-size: 100% 100%; background-repeat: no-repeat; image-rendering: pixelated; backface-visibility: hidden; }
+.lid {
+  transform: var(--lid-pos) rotateX(var(--lid-rot, 0deg));
+  transform-origin: 50% 100% calc(var(--u) * -7);
+  transition: transform .6s cubic-bezier(.34, 1.4, .5, 1);
+}
+.chest-btn:hover .lid, .chest-btn:focus-visible .lid { --lid-rot: 7deg; }
+.chest-scene.open .lid, .chest-scene.open .chest-btn:hover .lid { --lid-rot: 100deg; }
+.f3.glow {
+  background: radial-gradient(closest-side, rgba(255, 228, 140, .95), rgba(255, 190, 70, .35) 62%, rgba(255, 190, 70, 0));
+  opacity: 0; transition: opacity .5s ease .1s;
+}
+.chest-scene.open .f3.glow { opacity: 1; }
+.ground-shadow {
+  position: absolute; left: calc(var(--u) * -23); top: calc(var(--u) * -13); width: calc(var(--u) * 34); height: calc(var(--u) * 26);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .38), rgba(0, 0, 0, 0)); transform: translateY(calc(var(--u) * .05)) rotateX(90deg);
+}
+.chest-hint { font: 10px/1.5 var(--font-d); color: var(--ink-soft); text-align: center; }
+@media (prefers-reduced-motion: reduce) { .world, .lid, .f3.glow { transition: none; } .torch-glow { animation: none; } }
+
+/* ---------- baú de skills (inventário) ---------- */
+html.modal-open, html.modal-open body { overflow: hidden; }
+.modal {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; overflow: auto;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(0, 0, 0, .62);
+}
+.chest-gui { --ms: clamp(28px, calc((100vw - 88px) / 9), 54px); position: relative; width: max-content; max-width: 100%; padding: 14px; display: grid; gap: 8px; margin: auto; }
+.chest-gui > .btn.chest-close { position: absolute; top: 8px; right: 8px; padding: 6px 8px; font-size: 9px; }
+.g-title { margin: 0; font: 11px/1.4 var(--font-d); color: var(--ink-soft); padding-right: 76px; }
+.g-title.low { margin-top: 6px; padding-right: 0; }
+.mgrid { display: grid; grid-template-columns: repeat(9, var(--ms)); gap: 2px; }
+.mgrid.hot { margin-top: 6px; }
+.mslot {
+  position: relative; display: grid; place-items: center; width: var(--ms); height: var(--ms); padding: 0; border: 0; border-radius: 0;
+  background: var(--slot); box-shadow: inset 2px 2px 0 var(--slot-lo), inset -2px -2px 0 var(--slot-hi);
+}
+button.mslot { cursor: default; }
+.mslot::after { content: ""; position: absolute; inset: 2px; background: #ffffff; opacity: 0; pointer-events: none; }
+.mslot:hover::after, .mslot:focus-visible::after { opacity: .45; }
+.mslot:focus-visible { outline: 3px solid var(--focus); outline-offset: -1px; z-index: 1; }
+.mslot .item { width: 76%; aspect-ratio: 1; height: auto; image-rendering: pixelated; display: block; pointer-events: none; }
+.mc-tip {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; max-width: 80vw;
+  background: rgba(16, 0, 16, .94); border: 3px solid #25005f; box-shadow: inset 0 0 0 2px #5a1fb0; padding: 6px 10px;
+}
+.mc-tip .tn { font: 24px/1 var(--font-b); color: #ffffff; }
+.mc-tip .tl { font: 20px/1.1 var(--font-b); color: #aaaaaa; margin-top: 3px; }
+
+.cv h3 { font: 11px/1.5 var(--font-d); margin: 0 0 10px; }
+.cv-list { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 8px; }
+.cv-list:last-child { margin-bottom: 0; }
+.cv-list li b { font-weight: normal; }
+.cv-list li span { color: var(--ink-soft); }
+.file { display: grid; gap: 14px; justify-items: start; }
+.pdf-ico {
+  width: 56px; height: 68px; display: grid; place-items: center; background: var(--panel); color: var(--ink);
+  border: 3px solid #000; font: 11px/1 var(--font-d);
+  box-shadow: inset 3px 3px 0 var(--panel-hi), inset -3px -3px 0 var(--panel-lo);
+}
+.file p { margin: 0; overflow-wrap: anywhere; }
+
+.sign {
+  background: var(--sign); color: var(--sign-ink); border: 4px solid #3c2711;
+  box-shadow: inset 4px 4px 0 var(--sign-hi), inset -4px -4px 0 var(--sign-lo); padding: 24px;
+}
+.sign h2 { font: 15px/1.5 var(--font-d); margin: 0 0 8px; }
+.sign > p { margin: 0 0 18px; }
+.rows { display: grid; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 14px; border-top: 4px solid var(--sign-lo); }
+.row span { font: 10px/1.4 var(--font-d); text-transform: uppercase; min-width: 90px; }
+.row a, .row output { color: var(--sign-ink); font-size: 24px; overflow-wrap: anywhere; min-width: 0; }
+.row .btn { padding: 9px 12px; font-size: 10px; }
+
+/* ---------- funcionalidades ---------- */
+.ftabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.tab { font-size: 11px; }
+.games-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 16px; }
+.games-head h3 { font: 12px/1.6 var(--font-d); margin: 0 0 4px; }
+.games-src { margin: 0; color: var(--ink-soft); font-size: 20px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg .btn { padding: 10px 12px; font-size: 10px; }
+.games { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.game {
+  position: relative; display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 14px; align-items: start;
+  background: var(--slot); color: var(--ink); padding: 14px;
+  box-shadow: inset 3px 3px 0 var(--slot-lo), inset -3px -3px 0 var(--slot-hi);
+}
+.game.is-next { outline: 4px solid var(--sel); outline-offset: -1px; }
+.g-date { text-align: center; display: grid; gap: 4px; }
+.g-day { font: 22px/1 var(--font-d); font-variant-numeric: tabular-nums; }
+.g-mon { font: 10px/1 var(--font-d); text-transform: uppercase; }
+.g-wd { font-size: 20px; line-height: 1; text-transform: capitalize; }
+.g-main { min-width: 0; }
+.g-main h3 { margin: 0 0 4px; font: 27px/1.05 var(--font-b); overflow-wrap: anywhere; }
+.g-meta { margin: 0; font-size: 21px; line-height: 1.15; }
+.g-meta + .g-meta { margin-top: 4px; }
+.g-label { margin: 12px 0 6px; font: 9px/1 var(--font-d); text-transform: uppercase; letter-spacing: .08em; }
+.goals { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; border-top: 2px dashed var(--slot-lo); padding-top: 6px; }
+.goals li { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; font-size: 21px; line-height: 1.15; }
+.goals .gm { font-variant-numeric: tabular-nums; }
+.goals .gp { overflow-wrap: anywhere; }
+.goals .gt { color: var(--ink-soft); font-size: 19px; text-align: right; }
+.goals li.mine .gp { color: var(--ink); text-shadow: .5px 0 0 currentColor; }
+.goals li:not(.mine) .gp { color: var(--ink-soft); }
+.g-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.chip {
+  display: inline-block; font: 10px/1 var(--font-d); padding: 7px 8px; color: #fff; background: var(--draw);
+  border: 3px solid #000; text-transform: uppercase;
+}
+.chip.home { background: var(--win); }
+.chip.away { background: #3f4a63; }
+.chip.score { font-size: 12px; background: #222; font-variant-numeric: tabular-nums; }
+.chip.w { background: var(--win); }
+.chip.l { background: var(--loss); }
+.chip.d { background: var(--draw); }
+.chip.rd { background: #3f4a63; }
+.g-next { font: 9px/1.2 var(--font-d); text-transform: uppercase; text-align: right; }
+.games-note { margin: 14px 0 0; color: var(--ink-soft); font-size: 20px; }
+
+.stand { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.stand h4 { font: 11px/1.5 var(--font-d); margin: 0 0 10px; }
+.tbl { overflow-x: auto; }
+.tbl table { width: 100%; border-collapse: collapse; font-size: 22px; }
+.tbl th { font: 9px/1.4 var(--font-d); text-align: left; text-transform: uppercase; padding: 6px 8px; border-bottom: 3px solid var(--slot-lo); }
+.tbl td { padding: 6px 8px; border-bottom: 2px dashed var(--slot-lo); }
+.tbl .n { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl .champ { margin-left: 8px; font: 9px/1 var(--font-d); padding: 3px 5px; background: var(--win); color: #fff; border: 2px solid #000; text-transform: uppercase; vertical-align: middle; }
+.stand .btn { margin-top: 12px; padding: 9px 12px; font-size: 10px; }
+
+.foot { margin-top: 56px; color: var(--hero); font-size: 20px; }
+.foot p { margin: 0; }
+
+@media (max-width: 700px) {
+  .about { grid-template-columns: minmax(0, 1fr); }
+  .gui, .sign { padding: 18px; }
+  .game { grid-template-columns: 62px minmax(0, 1fr); }
+  .g-side { grid-column: 2; flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .g-next { text-align: left; }
+  .g-main h3 { font-size: 25px; }
+  .goals li { grid-template-columns: 52px minmax(0, 1fr); }
+  .goals .gt { grid-column: 2; text-align: left; margin-top: -2px; }
+}
+@media (prefers-reduced-motion: reduce) { .splash { animation: none; } }
+</style>
+
+<canvas id="bg" aria-hidden="true"></canvas>
+
+<!-- ======== Tela inicial ======== -->
+<section id="inicio" class="title" aria-label="Menu inicial">
+  <div class="logo">
+    <!-- EDITE: seu nome -->
+    <h1 class="wordmark">Seu Nome</h1>
+    <p class="tag">Portfólio · Ciência da Computação</p>
+    <span class="splash">Aberto a oportunidades!</span>
+  </div>
+  <nav class="menu" id="menu" aria-label="Menu">
+    <button class="mbtn" id="startBtn" type="button">Start</button>
+    <button class="mbtn" id="contatoBtn" type="button">Contatos</button>
+    <button class="mbtn" id="funcBtn" type="button">Funcionalidades</button>
+  </nav>
+  <p class="corner l">Portfólio 1.0</p>
+  <p class="corner r">© 2026 Seu Nome</p>
+</section>
+
+<!-- ======== Cena de apresentação ======== -->
+<section id="cena" class="stage" aria-label="Apresentação">
+  <p class="stage-cap">Apresentação</p>
+  <button class="btn skip" id="skipBtn" type="button" hidden>Pular</button>
+</section>
+<div class="bubble" id="bubble" hidden aria-live="polite"><span class="ghost" id="bGhost"></span><span class="typed" id="bTyped"></span></div>
+
+<div class="wrap">
+  <div class="layout" id="layout">
+    <div class="hud" role="navigation" aria-label="Seções">
+      <p class="hud-name" id="hudName" aria-live="polite">Sobre</p>
+      <ol class="hotbar gui" id="hotbar">
+        <li><a class="slot" href="#inicio" data-id="inicio" aria-label="Início" aria-current="false" style="--c1:#5fa83a;--c2:#8b5a3c"><b>1</b><i></i></a></li>
+        <li><a class="slot" href="#sobre" data-id="sobre" aria-label="Sobre" aria-current="true" style="--c1:#c9a46a;--c2:#a07a4a"><b>2</b><i></i></a></li>
+        <li><a class="slot" href="#skills" data-id="skills" aria-label="Skills" aria-current="false" style="--c1:#6ff0e2;--c2:#25b3a6"><b>3</b><i></i></a></li>
+        <li><a class="slot" href="#curriculo" data-id="curriculo" aria-label="Currículo" aria-current="false" style="--c1:#e8e0c8;--c2:#b5a88a"><b>4</b><i></i></a></li>
+        <li><a class="slot" href="#contato" data-id="contato" aria-label="Contato" aria-current="false" style="--c1:#d9b57a;--c2:#8a6a3c"><b>5</b><i></i></a></li>
+        <li><a class="slot" href="#funcionalidades" data-id="funcionalidades" aria-label="Funcionalidades" aria-current="false" style="--c1:#e0584a;--c2:#8f2a22"><b>6</b><i></i></a></li>
+      </ol>
+    </div>
+    <button class="btn theme-toggle hud-toggle" type="button" aria-pressed="false">Noite</button>
+
+    <main>
+      <!-- EDITE: os textos abaixo são genéricos -->
+      <section id="sobre" class="panel gui">
+        <h2>Sobre mim</h2>
+        <div class="about">
+          <div>
+            <p>Sou estudante de Ciência da Computação na Universidade Exemplo e trabalho com desenvolvimento web, principalmente back-end e APIs. Gosto de projetos em que posso aprender algo novo a cada entrega.</p>
+            <p>Fora da faculdade, participo de projetos pessoais e de comunidades de tecnologia. Procuro estágio ou oportunidades em desenvolvimento de software.</p>
+          </div>
+          <div class="inset">
+            <dl>
+              <div><dt>Curso</dt><dd>Ciência da Computação</dd></div>
+              <div><dt>Instituição</dt><dd>Universidade Exemplo</dd></div>
+              <div><dt>Cidade</dt><dd>Cidade, UF</dd></div>
+              <div><dt>Foco</dt><dd>Back-end e web</dd></div>
+              <div><dt>Idiomas</dt><dd>Português, inglês</dd></div>
+            </dl>
+          </div>
+        </div>
+
+        <h2 class="sub">Experiência</h2>
+        <ol class="adv">
+          <li>
+            <div class="frame"><i style="--c:#d6a516"></i></div>
+            <div>
+              <h3>Estagiário de Desenvolvimento</h3>
+              <p class="meta">Empresa Exemplo · 2025 – atual</p>
+              <p>Desenvolvimento de APIs REST, correção de bugs e escrita de testes automatizados em equipe ágil.</p>
+            </div>
+          </li>
+          <li>
+            <div class="frame"><i style="--c:#3572a5"></i></div>
+            <div>
+              <h3>Monitor de Algoritmos</h3>
+              <p class="meta">Universidade Exemplo · 2024</p>
+              <p>Apoio a turmas de estruturas de dados, com plantões de dúvidas e correção de exercícios.</p>
+            </div>
+          </li>
+          <li>
+            <div class="frame"><i style="--c:#4a8a2f"></i></div>
+            <div>
+              <h3>Técnico em Informática</h3>
+              <p class="meta">Escola Técnica Exemplo · 2021 – 2023</p>
+              <p>Formação em programação, redes e banco de dados, com projeto final em desenvolvimento web.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section id="skills" class="panel gui">
+        <h2>Skills</h2>
+        <div class="chest-scene" id="chestScene">
+          <div class="chest-btn" id="chestBtn" role="button" tabindex="0" aria-haspopup="dialog" aria-expanded="false" aria-label="Abrir o baú de skills">
+            <div class="chest-room" id="chestRoom">
+              <canvas class="room-bg" id="roomBg" aria-hidden="true"></canvas>
+              <div class="torch-glow a" id="tgA" aria-hidden="true"></div><div class="torch-glow b" id="tgB" aria-hidden="true"></div>
+              <div class="room-light" aria-hidden="true"></div><div class="room-dim" aria-hidden="true"></div>
+              <div class="chest-stage"><div class="world" id="world"></div></div>
+            </div>
+          </div>
+          <span class="chest-hint">Clique no baú para abrir</span>
+        </div>
+
+        <h2 class="sub">Projetos</h2>
+        <div class="cards">
+          <article class="tip">
+            <h3>Nome do Projeto 1</h3>
+            <p class="type">Aplicação web</p>
+            <p>Descrição curta do que o projeto faz e qual problema ele resolve.</p>
+            <p class="tags">React · Node.js · PostgreSQL</p>
+            <div class="links"><a href="https://github.com/seu-usuario/projeto-1">&gt; Código</a><a href="https://exemplo.com/projeto-1">&gt; Demo</a></div>
+          </article>
+          <article class="tip">
+            <h3>Nome do Projeto 2</h3>
+            <p class="type">API REST</p>
+            <p>Descrição curta do projeto, com autenticação, testes e documentação.</p>
+            <p class="tags">Java · Spring · Docker</p>
+            <div class="links"><a href="https://github.com/seu-usuario/projeto-2">&gt; Código</a></div>
+          </article>
+          <article class="tip">
+            <h3>Nome do Projeto 3</h3>
+            <p class="type">Ferramenta de linha de comando</p>
+            <p>Descrição curta do projeto e de como ele ajuda no dia a dia.</p>
+            <p class="tags">Python · Git</p>
+            <div class="links"><a href="https://github.com/seu-usuario/projeto-3">&gt; Código</a></div>
+          </article>
+          <article class="tip">
+            <h3>Nome do Projeto 4</h3>
+            <p class="type">Jogo 2D</p>
+            <p>Descrição curta do projeto, das mecânicas e do que foi aprendido.</p>
+            <p class="tags">TypeScript · Canvas</p>
+            <div class="links"><a href="https://github.com/seu-usuario/projeto-4">&gt; Código</a><a href="https://exemplo.com/projeto-4">&gt; Jogar</a></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="curriculo" class="panel gui">
+        <h2>Currículo</h2>
+        <div class="about cv">
+          <div>
+            <h3>Formação</h3>
+            <ul class="cv-list">
+              <li><b>Ciência da Computação</b><br><span>Universidade Exemplo · 2023 – 2027</span></li>
+              <li><b>Técnico em Informática</b><br><span>Escola Técnica Exemplo · 2021 – 2023</span></li>
+            </ul>
+            <h3>Experiência</h3>
+            <ul class="cv-list">
+              <li><b>Estagiário de Desenvolvimento</b><br><span>Empresa Exemplo · 2025 – atual</span></li>
+              <li><b>Monitor de Algoritmos</b><br><span>Universidade Exemplo · 2024</span></li>
+            </ul>
+            <h3>Idiomas</h3>
+            <ul class="cv-list">
+              <li><b>Português</b> <span>nativo</span></li>
+              <li><b>Inglês</b> <span>intermediário</span></li>
+            </ul>
+          </div>
+          <div class="inset file">
+            <div class="pdf-ico" aria-hidden="true">PDF</div>
+            <p>curriculo-seu-nome.pdf</p>
+            <p class="meta">Atualizado em nov/2026</p>
+            <!-- EDITE: troque o link pelo endereço do seu PDF -->
+            <a class="btn" href="https://exemplo.com/curriculo.pdf" target="_blank" rel="noopener">Abrir PDF</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="contato" class="panel sign">
+        <h2>Contato</h2>
+        <p>Quer conversar sobre uma vaga, projeto ou ideia? Escreva para mim.</p>
+        <div class="rows">
+          <div class="row"><span>GitHub</span><a href="https://github.com/seu-usuario">github.com/seu-usuario</a></div>
+          <div class="row"><span>LinkedIn</span><a href="https://linkedin.com/in/seu-usuario">linkedin.com/in/seu-usuario</a></div>
+          <div class="row"><span>E-mail</span><output id="mail">seu@email.com</output><button class="btn" id="copyBtn" type="button">Copiar</button></div>
+        </div>
+      </section>
+
+      <section id="funcionalidades" class="panel gui">
+        <h2>Funcionalidades</h2>
+        <div class="ftabs" role="tablist" aria-label="Funcionalidades">
+          <button class="btn tab" role="tab" id="ft-cru" aria-selected="true" aria-controls="fp-cru" type="button">Jogos do Cruzeiro</button>
+          <button class="btn tab" role="tab" id="ft-f1" aria-selected="false" aria-controls="fp-f1" type="button">Temporada de F1</button>
+          <button class="btn tab" role="tab" type="button" disabled aria-disabled="true">Em breve</button>
+        </div>
+
+        <div role="tabpanel" id="fp-cru" aria-labelledby="ft-cru">
+          <div class="games-head">
+            <div>
+              <h3>Calendário e resultados</h3>
+              <p class="games-src" id="gamesSrc">Carregando jogos…</p>
+            </div>
+            <div class="seg" id="cruSeg" role="group" aria-label="Filtrar jogos">
+              <button class="btn" type="button" data-f="next" aria-pressed="true">Próximos</button>
+              <button class="btn" type="button" data-f="past" aria-pressed="false">Resultados</button>
+              <button class="btn" type="button" data-f="all" aria-pressed="false">Todos</button>
+            </div>
+          </div>
+          <ol class="games" id="games"></ol>
+          <p class="games-note">Horários de Brasília. Minutos de acréscimo aparecem como 45+1.</p>
+        </div>
+
+        <div role="tabpanel" id="fp-f1" aria-labelledby="ft-f1" hidden>
+          <div class="games-head">
+            <div>
+              <h3>Temporada 2026</h3>
+              <p class="games-src" id="f1Src">Carregando corridas…</p>
+            </div>
+            <div class="seg" id="f1Seg" role="group" aria-label="Filtrar corridas">
+              <button class="btn" type="button" data-f="next" aria-pressed="true">Próximas</button>
+              <button class="btn" type="button" data-f="past" aria-pressed="false">Resultados</button>
+              <button class="btn" type="button" data-f="all" aria-pressed="false">Calendário</button>
+              <button class="btn" type="button" data-f="stand" aria-pressed="false">Classificação</button>
+            </div>
+          </div>
+          <ol class="games" id="f1List"></ol>
+          <div class="stand" id="f1Stand" hidden></div>
+          <p class="games-note" id="f1Note">Horários de Brasília. Corridas já realizadas mostram só a data.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="foot"><p>© 2026 Seu Nome. Feito com blocos.</p></footer>
+</div>
+
+<div class="modal" id="chestModal" role="dialog" aria-modal="true" aria-labelledby="chestTitle" hidden>
+  <div class="chest-gui gui">
+    <p class="g-title" id="chestTitle">Skills</p>
+    <button class="btn chest-close" id="chestClose" type="button">Fechar</button>
+    <div class="mgrid" id="chestGrid"></div>
+  </div>
+</div>
+<div class="mc-tip" id="mcTip" role="tooltip" hidden><div class="tn" id="tipName"></div><div class="tl" id="tipLore"></div></div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  var rm = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var toggles = Array.prototype.slice.call(document.querySelectorAll('.theme-toggle'));
+
+  var tabIds = ['sobre', 'skills', 'curriculo', 'contato', 'funcionalidades'];
+  var mode = 'menu'; /* menu | pre | cine | site */
+
+  function isDark() {
+    var t = root.getAttribute('data-theme');
+    return t === 'dark' || (t !== 'light' && mq.matches);
+  }
+  function lock() { root.classList.add('locked'); }
+  function unlock() { root.classList.remove('locked'); }
+  function go(id) {
+    var el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: rm.matches ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  /* ---------- navegação (hotbar) ---------- */
+  var names = { sobre: 'Sobre', skills: 'Skills', curriculo: 'Currículo', contato: 'Contato', funcionalidades: 'Funcionalidades' };
+  var slots = Array.prototype.slice.call(document.querySelectorAll('.slot'));
+  var hudName = document.getElementById('hudName');
+  function setActive(id) {
+    if (!names[id]) return;
+    slots.forEach(function (s) { s.setAttribute('aria-current', s.getAttribute('data-id') === id ? 'true' : 'false'); });
+    hudName.textContent = names[id];
+  }
+  function enterSite() { mode = 'site'; unlock(); root.classList.add('in-site'); }
+  function openTab(id) {
+    enterSite(); setActive(id); go(id);
+    try { history.replaceState(null, '', '#' + id); } catch (e) {}
+  }
+  function backToMenu() {
+    mode = 'menu'; root.classList.remove('in-site');
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    go('inicio');
+    setTimeout(function () { if (mode === 'menu') lock(); }, rm.matches ? 50 : 1100);
+  }
+  slots.forEach(function (s) {
+    s.addEventListener('click', function (e) {
+      e.preventDefault();
+      var id = s.getAttribute('data-id');
+      if (id === 'inicio') backToMenu(); else openTab(id);
+    });
+  });
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      if (mode !== 'site') return;
+      entries.forEach(function (e) { if (e.isIntersecting) setActive(e.target.id); });
+    }, { rootMargin: '-30% 0px -60% 0px' });
+    tabIds.forEach(function (id) { io.observe(document.getElementById(id)); });
+  }
+  window.addEventListener('scroll', function () {
+    if (mode === 'site' && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) setActive('funcionalidades');
+  }, { passive: true });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey || mode !== 'site' || root.classList.contains('modal-open')) return;
+    var tag = (e.target && e.target.tagName) || '';
+    if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+    var n = parseInt(e.key, 10), ids = ['inicio'].concat(tabIds);
+    if (n >= 1 && n <= ids.length) { if (ids[n - 1] === 'inicio') backToMenu(); else openTab(ids[n - 1]); }
+  });
+
+  /* ---------- menu inicial ---------- */
+  var startBtn = document.getElementById('startBtn');
+  var contatoBtn = document.getElementById('contatoBtn');
+  var funcBtn = document.getElementById('funcBtn');
+  var skipBtn = document.getElementById('skipBtn');
+  var menuBtns = [startBtn, contatoBtn, funcBtn];
+
+  document.getElementById('menu').addEventListener('keydown', function (e) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    var i = menuBtns.indexOf(document.activeElement);
+    if (i < 0) i = e.key === 'ArrowDown' ? -1 : 0;
+    var n = (i + (e.key === 'ArrowDown' ? 1 : menuBtns.length - 1)) % menuBtns.length;
+    menuBtns[n].focus();
+    e.preventDefault();
+  });
+
+  startBtn.addEventListener('click', function () {
+    if (mode === 'pre' || mode === 'cine') return;
+    if (rm.matches) { openTab('sobre'); return; }
+    lock(); mode = 'pre'; go('cena');
+    setTimeout(beginCine, 1000);
+  });
+  contatoBtn.addEventListener('click', function () { openTab('contato'); });
+  funcBtn.addEventListener('click', function () { openTab('funcionalidades'); });
+  skipBtn.addEventListener('click', function () { finishCine(); });
+
+  var h0 = location.hash.slice(1);
+  if (tabIds.indexOf(h0) >= 0) { mode = 'site'; root.classList.add('in-site'); setActive(h0); } else { lock(); }
+
+  /* ---------- copiar e-mail ---------- */
+  var copyBtn = document.getElementById('copyBtn');
+  var mail = document.getElementById('mail');
+  copyBtn.addEventListener('click', function () {
+    var v = mail.textContent.trim();
+    function flash(txt) { copyBtn.textContent = txt; setTimeout(function () { copyBtn.textContent = 'Copiar'; }, 1600); }
+    function select() {
+      var r = document.createRange(); r.selectNodeContents(mail);
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); flash('Selecionado');
+    }
+    try { navigator.clipboard.writeText(v).then(function () { flash('Copiado'); }, select); }
+    catch (err) { select(); }
+  });
+
+  /* ---------- mundo (canvas) ---------- */
+  var cv = document.getElementById('bg');
+  var ctx = cv.getContext('2d');
+  var bubble = document.getElementById('bubble');
+  var bGhost = document.getElementById('bGhost');
+  var bTyped = document.getElementById('bTyped');
+  var W = 0, H = 0, dpr = 1, GH = 64, ground = null, C = {};
+  var stars = [], clouds = [];
+  var t = 0, last = 0, farOff = 0, nearOff = 0;
+  var heroX = -80, speed = 0, phase = 0, lastStep = 0, waveAng = null, dust = [];
+  var cine = { t: 0 };
+
+  function scale() { return W < 640 ? 4 : 5; }
+  function readColors() {
+    var cs = getComputedStyle(root);
+    function g(n) { return cs.getPropertyValue(n).trim(); }
+    C = {
+      grass: g('--grass'), grassDark: g('--grass-dark'), dirt: g('--dirt'), dirtDark: g('--dirt-dark'),
+      hillFar: g('--hill-far'), hillNear: g('--hill-near'), leaf: g('--leaf'), trunk: g('--trunk'),
+      cloud: g('--cloud'), sun: g('--sun'), sunCore: g('--sun-core'), moon: g('--moon'), moonDark: g('--moon-dark'),
+      night: isDark()
+    };
+  }
+  function hash(n) {
+    n = (n ^ 61) ^ (n >>> 16); n = n + (n << 3); n = n ^ (n >>> 4);
+    n = Math.imul(n, 0x27d4eb2d); n = n ^ (n >>> 15); return n >>> 0;
+  }
+  function renderGround() {
+    ground = document.createElement('canvas');
+    ground.width = Math.ceil(W * dpr); ground.height = Math.ceil(GH * dpr);
+    var g = ground.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var T = 16, cols = Math.ceil(W / T), rws = GH / T;
+    for (var cx = 0; cx < cols; cx++) {
+      for (var ry = 0; ry < rws; ry++) {
+        var y = ry * T;
+        g.fillStyle = ry === 0 ? C.grass : C.dirt;
+        g.fillRect(cx * T, y, T, T);
+        for (var k = 0; k < 4; k++) {
+          var h = hash(cx * 7 + ry * 13 + k * 31);
+          g.fillStyle = ry === 0 ? C.grassDark : C.dirtDark;
+          g.fillRect(cx * T + (h % 4) * 4, y + ((h >> 3) % 4) * 4, 4, 4);
+        }
+      }
+    }
+  }
+  function initSky() {
+    stars = [];
+    for (var i = 0; i < 70; i++) {
+      var h = hash(i * 977 + 13);
+      stars.push({ x: (h % 1000) / 1000, y: ((h >> 10) % 600) / 1000, p: (h % 628) / 100 });
+    }
+    clouds = [];
+    for (var j = 0; j < 5; j++) {
+      var q = hash(j * 331 + 7);
+      clouds.push({ x: (q % 1000) / 1000 * W, y: 90 + ((q >> 10) % 160), u: 10 + (q % 3) * 3, v: 6 + (q % 5) * 2 });
+    }
+  }
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.ceil(W * dpr); cv.height = Math.ceil(H * dpr);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    readColors(); renderGround(); initSky();
+    if (heroX < -40) heroX = W * 0.7;
+    if (rm.matches) frame(0, true);
+  }
+
+  function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+  function limb(px, py, ang, fn) {
+    ctx.save(); ctx.translate(px, py); ctx.rotate(ang); fn(); ctx.restore();
+  }
+
+  /* Personagem original (dev com fones e mochila). Edite as cores aqui para criar o seu avatar. */
+  var P = {
+    skin: '#d9a07a', skinF: '#b8825f', hair: '#1d2433',
+    hoodie: '#e8743b', hoodieF: '#c25a28', pants: '#2d3142', pantsF: '#1f2333',
+    shoe: '#f4f1ea', shoeF: '#c9c5bb', sole: '#8f3b1f',
+    pack: '#5c6773', packLine: '#3f4852', sticker: '#ffd23f',
+    phones: '#2ec4b6', phonesD: '#1c8f84', frame: '#14161c', lens: '#bfe9ff', mouth: '#9e4f3a'
+  };
+  function hero(px, py, s, ph, amp, wave) {
+    var sw = Math.sin(ph) * 0.75 * amp;
+    var bob = Math.abs(Math.cos(ph)) * 0.5 * amp;
+    ctx.save();
+    ctx.translate(Math.round(px), Math.round(py - bob * s));
+    ctx.scale(s, s);
+    limb(0, -14, -sw, function () { rect(-1, -1, 3, 5, P.hoodieF); rect(-1, 4, 3, 3, P.skinF); });
+    limb(0, -7, sw, function () { rect(-1, 0, 3, 5, P.pantsF); rect(-1, 5, 4, 1, P.shoeF); rect(-1, 6, 4, 1, P.sole); });
+    rect(-6, -14, 3, 6, P.pack); rect(-3, -13, 1, 5, P.packLine); rect(-5, -12, 1, 1, P.sticker);
+    rect(-3, -15, 6, 8, P.hoodie); rect(-3, -8, 6, 1, P.hoodieF); rect(-1, -11, 4, 2, P.hoodieF); rect(1, -14, 1, 2, P.shoe);
+    limb(0, -7, -sw, function () { rect(-1, 0, 3, 5, P.pants); rect(-1, 5, 4, 1, P.shoe); rect(-1, 6, 4, 1, P.sole); });
+    rect(-5, -25, 10, 10, P.skin);
+    rect(-5, -25, 10, 3, P.hair); rect(-5, -22, 3, 4, P.hair);
+    rect(-3, -26, 6, 1, P.phones);
+    rect(-2, -21, 4, 5, P.phones); rect(-1, -20, 2, 3, P.phonesD);
+    rect(2, -21, 4, 3, P.frame); rect(3, -20, 2, 1, P.lens); rect(4, -20, 1, 1, P.frame);
+    rect(5, -18, 1, 2, P.skin); rect(3, -17, 2, 1, P.mouth);
+    var a = wave == null ? sw : wave;
+    limb(0, -14, a, function () { rect(-1, -1, 3, 5, P.hoodie); rect(-1, 4, 3, 3, P.skin); });
+    ctx.restore();
+  }
+
+  function hillH(k, seed, base, amp, step) {
+    var n = Math.sin(k * 0.11 + seed) * 0.5 + Math.sin(k * 0.27 + seed * 2.3) * 0.3 + ((hash(k * 13 + seed * 97) % 100) / 100 - 0.5) * 0.25;
+    return Math.max(step, Math.round((base + amp * n) / step) * step);
+  }
+  function hills(seed, base, amp, color, off, trees) {
+    var step = 16, cols = Math.ceil(W / step) + 2, first = Math.floor(off / step), rem = off - first * step;
+    ctx.fillStyle = color;
+    var gy = H - GH;
+    for (var i = 0; i < cols; i++) {
+      var k = first + i, h = hillH(k, seed, base, amp, step), x = i * step - rem;
+      ctx.fillRect(x, gy - h, step, h + 2);
+      if (trees && hash(k * 7 + 3) % 9 === 0) {
+        var ty = gy - h;
+        rect(x + 6, ty - 24, 4, 24, C.trunk);
+        rect(x - 2, ty - 48, 20, 16, C.leaf);
+        rect(x + 2, ty - 60, 12, 12, C.leaf);
+      }
+    }
+  }
+
+  function spawnDust(x, y, s) {
+    for (var i = 0; i < 3; i++) {
+      dust.push({ x: x - s * 2 + Math.random() * s * 2, y: y, vx: -20 - Math.random() * 40, vy: -20 - Math.random() * 40, life: 0.5, size: s * 0.6 });
+    }
+  }
+
+  /* ---------- cena de apresentação ---------- */
+  function myName() { return document.querySelector('.wordmark').textContent.trim(); }
+  function setBubble(full, frac) {
+    if (bGhost.textContent !== full) bGhost.textContent = full;
+    var n = Math.floor(full.length * Math.min(1, Math.max(0, frac)));
+    var tx = full.slice(0, n);
+    if (bTyped.textContent !== tx) bTyped.textContent = tx;
+    bubble.hidden = false;
+  }
+  function beginCine() {
+    if (mode !== 'pre') return;
+    mode = 'cine'; cine.t = 0; heroX = -8 * scale(); speed = 0; skipBtn.hidden = false;
+  }
+  function finishCine() {
+    if (mode !== 'cine' && mode !== 'pre') return;
+    bubble.hidden = true; skipBtn.hidden = true; waveAng = null;
+    openTab('sobre');
+  }
+  function updateCine(dt, s) {
+    cine.t += dt;
+    var tt = cine.t, x1 = Math.max(W * 0.45, 10 * s);
+    speed = 0; waveAng = null;
+    if (tt < 3.0) {
+      var u = Math.sin((tt / 3.0) * Math.PI / 2);
+      var nx = -8 * s + (x1 + 8 * s) * u;
+      speed = Math.abs(nx - heroX) / Math.max(dt, 0.001); heroX = nx;
+    } else if (tt < 6.6) {
+      if (tt > 3.4 && tt < 5.0) waveAng = -2.5 + 0.3 * Math.sin(tt * 14);
+    } else {
+      var sp = Math.min(150, (tt - 6.6) * 180); heroX += sp * dt; speed = sp;
+    }
+    var nm = myName();
+    if (tt >= 3.4 && tt < 5.0) setBubble('Olá! Eu sou ' + nm + '.', (tt - 3.4) / 0.9);
+    else if (tt >= 5.0 && tt < 6.6) setBubble('Vem comigo conhecer meu portfólio.', (tt - 5.0) / 1.1);
+    else bubble.hidden = true;
+    if (!bubble.hidden) {
+      bubble.style.left = Math.round(heroX) + 'px';
+      bubble.style.top = Math.round(H - GH - 29 * s - 16) + 'px';
+    }
+    if (tt >= 7.6) finishCine();
+  }
+
+  function frame(ts, still) {
+    var dt = last ? Math.min((ts - last) / 1000, 0.05) : 0;
+    last = ts;
+    if (!still) { t += dt; farOff += 5 * dt; nearOff += 11 * dt; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    if (C.night) {
+      for (var i = 0; i < stars.length; i++) {
+        var st = stars[i];
+        ctx.globalAlpha = still ? 0.8 : 0.45 + 0.4 * Math.sin(t * 1.5 + st.p);
+        rect(Math.round(st.x * W), Math.round(st.y * H), 3, 3, '#ffffff');
+      }
+      ctx.globalAlpha = 1;
+      var mx = W - 120, my = 120;
+      rect(mx, my, 44, 44, C.moon);
+      rect(mx + 8, my + 10, 10, 10, C.moonDark);
+      rect(mx + 26, my + 24, 8, 8, C.moonDark);
+      rect(mx + 22, my + 6, 6, 6, C.moonDark);
+    } else {
+      var sx = W - 120, sy = 120;
+      rect(sx, sy, 44, 44, C.sun);
+      rect(sx + 10, sy + 10, 24, 24, C.sunCore);
+      ctx.globalAlpha = 0.9;
+      for (var j = 0; j < clouds.length; j++) {
+        var c = clouds[j], u2 = c.u;
+        if (!still) { c.x += c.v * dt; if (c.x > W + u2 * 8) c.x = -u2 * 8; }
+        var cx = Math.round(c.x), cy = Math.round(c.y);
+        rect(cx, cy, u2 * 6, u2 * 2, C.cloud);
+        rect(cx + u2 * 1.5, cy - u2, u2 * 3, u2, C.cloud);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    hills(1.7, 150, 90, C.hillFar, farOff, false);
+    hills(4.2, 78, 52, C.hillNear, nearOff, true);
+    ctx.drawImage(ground, 0, H - GH, W, GH);
+
+    var s = scale(), gy = H - GH + 2, sy2 = window.pageYOffset || 0;
+    var showHero = false;
+    if (still) {
+      speed = 0; showHero = sy2 > H * 0.45;
+    } else if (mode === 'cine') {
+      updateCine(dt, s); showHero = true;
+    } else if (mode === 'site') {
+      heroX += 62 * dt; speed = 62;
+      if (heroX > W + 8 * s) heroX = -8 * s;
+      showHero = sy2 > H * 0.45;
+    } else { speed = 0; }
+
+    phase += (speed / (s * 7)) * dt;
+    var step = Math.floor(phase / Math.PI);
+    if (step !== lastStep) { lastStep = step; if (speed > 30 && showHero) spawnDust(heroX, gy, s); }
+    for (var d = dust.length - 1; d >= 0; d--) {
+      var p = dust[d]; p.life -= dt;
+      if (p.life <= 0) { dust.splice(d, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.globalAlpha = Math.max(0, p.life / 0.5) * 0.7;
+      rect(Math.round(p.x), Math.round(p.y), p.size, p.size, C.dirtDark);
+    }
+    ctx.globalAlpha = 1;
+    if (showHero) {
+      var amp = Math.min(1, speed / 45);
+      hero(still ? W * 0.7 : heroX, gy, s, phase, amp, waveAng);
+    }
+  }
+  function loop(ts) { frame(ts, false); requestAnimationFrame(loop); }
+
+  /* ---------- tema (dia / noite) ---------- */
+  function sync() {
+    var d = isDark();
+    toggles.forEach(function (b) { b.textContent = d ? 'Dia' : 'Noite'; b.setAttribute('aria-pressed', d ? 'true' : 'false'); });
+    readColors(); if (W) { renderGround(); if (rm.matches) frame(0, true); }
+  }
+  try {
+    var saved = localStorage.getItem('theme');
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+  } catch (e) {}
+  toggles.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var next = isDark() ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+      sync();
+    });
+  });
+  if (mq.addEventListener) mq.addEventListener('change', sync);
+
+  window.addEventListener('resize', resize);
+  if (rm.matches) window.addEventListener('scroll', function () { frame(0, true); }, { passive: true });
+  resize();
+  sync();
+  if (!rm.matches) requestAnimationFrame(loop);
+
+  /* ---------- utilitários das funcionalidades ---------- */
+  var TZ = 'America/Sao_Paulo';
+  var fmtParts = new Intl.DateTimeFormat('pt-BR', { timeZone: TZ, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  var fmtYmd = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+  function brDay(ms) { var p = fmtYmd.format(ms).split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5; }
+  function clean(s) { return String(s).replace('.', ''); }
+  function dparts(ms) {
+    var o = {};
+    fmtParts.formatToParts(ms).forEach(function (x) { o[x.type] = x.value; });
+    return { day: o.day, mon: clean(o.month), wd: clean(o.weekday), time: o.hour + ':' + o.minute };
+  }
+  function el(tag, cls, txt) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (txt != null) n.textContent = txt;
+    return n;
+  }
+  function bindSeg(id, cb) {
+    var box = document.getElementById(id);
+    var btns = Array.prototype.slice.call(box.querySelectorAll('.btn'));
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        btns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        cb(b.getAttribute('data-f'));
+      });
+    });
+  }
+  function dateCol(g) {
+    var d = el('div', 'g-date');
+    d.appendChild(el('span', 'g-day', g.day));
+    d.appendChild(el('span', 'g-mon', g.mon));
+    d.appendChild(el('span', 'g-wd', g.wd));
+    return d;
+  }
+  function listBlock(label, items) {
+    var box = document.createDocumentFragment();
+    box.appendChild(el('p', 'g-label', label));
+    var ul = el('ul', 'goals');
+    items.forEach(function (it) {
+      var li = el('li', it.mine ? 'mine' : '');
+      li.appendChild(el('span', 'gm', it.a));
+      li.appendChild(el('span', 'gp', it.b));
+      if (it.c) li.appendChild(el('span', 'gt', it.c));
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    return box;
+  }
+
+  /* ---------- Funcionalidades: sub-abas ---------- */
+  var fTabs = [
+    { btn: document.getElementById('ft-cru'), panel: document.getElementById('fp-cru') },
+    { btn: document.getElementById('ft-f1'), panel: document.getElementById('fp-f1') }
+  ];
+  fTabs.forEach(function (tb) {
+    tb.btn.addEventListener('click', function () {
+      fTabs.forEach(function (o) {
+        var on = o === tb;
+        o.btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        o.panel.hidden = !on;
+      });
+    });
+  });
+
+  /* ---------- Jogos do Cruzeiro ---------- */
+  /* Para dados ao vivo, preencha url e headers e hospede a página num domínio próprio.
+     Dentro do Claude a página não consegue chamar APIs externas, então ela mostra o retrato salvo abaixo.
+     Exemplo (football-data.org, precisa de token gratuito e conferir o id do time):
+       url: 'https://api.football-data.org/v4/teams/1771/matches?season=2026'
+       headers: { 'X-Auth-Token': 'SEU_TOKEN' } */
+  var CRUZEIRO_API = { url: '', headers: {}, adapter: fromFootballData };
+
+  /* Retrato salvo em 10/11/2026. utc = início da partida (convertido para Brasília na tela).
+     Gols: m = minuto, side = home ou away (lado de quem fez o gol), ast = assistência. */
+  var SNAPSHOT = {
+    savedAt: '10/11/2026',
+    games: [
+      { utc: '2026-10-18T19:00:00Z', home: 'Grêmio', away: 'Cruzeiro', venue: 'Arena do Grêmio', city: 'Porto Alegre', comp: 'Brasileirão Série A', round: 'Rodada 31', hs: 2, as: 4,
+        goals: [
+          { m: '17', who: 'Carlos Vinícius', side: 'home', pen: 1 },
+          { m: '23', who: 'Kaio Jorge', side: 'away', ast: 'Matheus Pereira' },
+          { m: '41', who: 'Cristian Pavón', side: 'home' },
+          { m: '48', who: 'Kaio Jorge', side: 'away' },
+          { m: '61', who: 'Kaio Jorge', side: 'away', ast: 'William' },
+          { m: '80', who: 'João Marcelo', side: 'away', ast: 'Gerson' }
+        ],
+        notes: ["Expulsão: Walter Kannemann (Grêmio), 73'"] },
+      { utc: '2026-10-23T23:00:00Z', home: 'Cruzeiro', away: 'Remo', venue: 'Mineirão', city: 'Belo Horizonte', comp: 'Brasileirão Série A', round: 'Rodada 32', hs: 1, as: 0,
+        goals: [ { m: '45+5', who: 'Fabrício Bruno', side: 'home', ast: 'Matheus Pereira' } ] },
+      { utc: '2026-10-29T22:30:00Z', home: 'Atlético-MG', away: 'Cruzeiro', venue: 'Arena MRV', city: 'Belo Horizonte', comp: 'Brasileirão Série A', round: 'Rodada 33', hs: 0, as: 1,
+        goals: [ { m: '4', who: 'Kaio Jorge', side: 'away', ast: 'Arroyo' } ] },
+      { utc: '2026-11-06T00:30:00Z', home: 'Cruzeiro', away: 'Bahia', venue: 'Mineirão', city: 'Belo Horizonte', comp: 'Brasileirão Série A', round: 'Rodada 34', hs: 3, as: 2,
+        goals: [
+          { m: '31', who: 'Cristian Oliveira', side: 'away' },
+          { m: '45+1', who: 'Kaio Jorge', side: 'home' },
+          { m: '68', who: 'Bruno Rodrigues', side: 'home' },
+          { m: '85', who: 'Kaio Jorge', side: 'home' },
+          { m: '90+4', who: 'Alejo Véliz', side: 'away' }
+        ] },
+      { utc: '2026-11-18T23:30:00Z', home: 'Cruzeiro', away: 'Palmeiras', venue: 'Mineirão', city: 'Belo Horizonte', comp: 'Brasileirão Série A', round: 'Rodada 35' },
+      { utc: '2026-11-22T00:00:00Z', home: 'Chapecoense', away: 'Cruzeiro', venue: 'Arena Condá', city: 'Chapecó', comp: 'Brasileirão Série A', round: 'Rodada 36' },
+      { utc: '2026-11-27T23:00:00Z', home: 'Fluminense', away: 'Cruzeiro', venue: 'Maracanã', city: 'Rio de Janeiro', comp: 'Brasileirão Série A', round: 'Rodada 37' },
+      { utc: '2026-12-03T00:30:00Z', home: 'Cruzeiro', away: 'Internacional', venue: 'Mineirão', city: 'Belo Horizonte', comp: 'Brasileirão Série A', round: 'Rodada 38' }
+    ]
+  };
+
+  function fromFootballData(j) {
+    return (j.matches || []).map(function (m) {
+      var ft = (m.score && m.score.fullTime) || {};
+      return {
+        utc: m.utcDate,
+        home: m.homeTeam.shortName || m.homeTeam.name, away: m.awayTeam.shortName || m.awayTeam.name,
+        venue: m.venue || '', city: '', comp: (m.competition && m.competition.name) || '',
+        round: m.matchday ? 'Rodada ' + m.matchday : '',
+        hs: ft.home == null ? null : ft.home, as: ft.away == null ? null : ft.away
+      };
+    });
+  }
+
+  function normalize(g) {
+    var ms = Date.parse(g.utc), p = dparts(ms);
+    var isHome = /cruzeiro/i.test(g.home);
+    return {
+      ms: ms, day: p.day, mon: p.mon, wd: p.wd, time: p.time,
+      home: g.home, away: g.away, isHome: isHome,
+      venue: g.venue || '', city: g.city || '', comp: g.comp || '', round: g.round || '',
+      hs: g.hs == null ? null : g.hs, as: g.as == null ? null : g.as,
+      notes: g.notes || [],
+      goals: (g.goals || []).map(function (x) {
+        var tm = x.side === 'home' ? g.home : g.away;
+        var extra = [tm];
+        if (x.pen) extra.push('pênalti');
+        if (x.og) extra.push('contra');
+        if (x.ast) extra.push('ass. ' + x.ast);
+        return { m: x.m, who: x.who, mine: (x.side === 'home') === isHome, tag: extra.join(' · ') };
+      })
+    };
+  }
+
+  var gamesState = { list: [], filter: 'next', source: 'snapshot', failed: false };
+  var gEl = document.getElementById('games');
+  var srcEl = document.getElementById('gamesSrc');
+
+  function renderGames() {
+    var now = Date.now();
+    var all = gamesState.list;
+    function isNext(g) { return g.hs == null && g.ms > now - 3 * 3600e3; }
+    var next = all.filter(isNext).sort(function (a, b) { return a.ms - b.ms; });
+    var past = all.filter(function (g) { return !isNext(g); }).sort(function (a, b) { return b.ms - a.ms; });
+    var f = gamesState.filter, items;
+    if (f === 'next') items = next;
+    else if (f === 'past') items = past;
+    else items = all.slice().sort(function (a, b) { return a.ms - b.ms; });
+    gEl.textContent = '';
+    if (!items.length) {
+      var li0 = el('li', 'game'); li0.style.gridTemplateColumns = 'minmax(0, 1fr)';
+      li0.appendChild(el('p', 'g-meta', 'Nenhum jogo nesta lista.')); gEl.appendChild(li0);
+    }
+    items.forEach(function (g) {
+      var upcoming = isNext(g);
+      var li = el('li', 'game' + (upcoming && g === next[0] ? ' is-next' : ''));
+      var m = el('div', 'g-main');
+      m.appendChild(el('h3', '', g.home + ' x ' + g.away));
+      var parts = [];
+      parts.push(g.time ? g.time : 'Horário a confirmar');
+      parts.push(g.venue ? (g.venue + (g.city ? ', ' + g.city : '')) : 'Local não informado');
+      var comp = g.comp + (g.round ? ' · ' + g.round : '');
+      if (comp) parts.push(comp);
+      m.appendChild(el('p', 'g-meta', parts.join(' · ')));
+      if (g.goals.length) {
+        m.appendChild(listBlock('Gols', g.goals.map(function (x) { return { a: x.m + "'", b: x.who, c: x.tag, mine: x.mine }; })));
+      }
+      g.notes.forEach(function (n) { m.appendChild(el('p', 'g-meta', n)); });
+      var side = el('div', 'g-side');
+      side.appendChild(el('span', 'chip ' + (g.isHome ? 'home' : 'away'), g.isHome ? 'Casa' : 'Fora'));
+      if (g.hs != null && g.as != null) {
+        var mine = g.isHome ? g.hs : g.as, theirs = g.isHome ? g.as : g.hs;
+        side.appendChild(el('span', 'chip score', g.hs + ' x ' + g.as));
+        side.appendChild(el('span', 'chip ' + (mine > theirs ? 'w' : mine < theirs ? 'l' : 'd'), mine > theirs ? 'Vitória' : mine < theirs ? 'Derrota' : 'Empate'));
+      } else if (!upcoming) {
+        side.appendChild(el('span', 'chip d', 'Sem placar'));
+      } else if (g === next[0]) {
+        var diff = Math.round(brDay(g.ms) - brDay(now));
+        side.appendChild(el('span', 'g-next', diff <= 0 ? 'Próximo jogo: hoje' : diff === 1 ? 'Próximo jogo: amanhã' : 'Próximo jogo: em ' + diff + ' dias'));
+      }
+      li.appendChild(dateCol(g)); li.appendChild(m); li.appendChild(side);
+      gEl.appendChild(li);
+    });
+    var src;
+    if (gamesState.source === 'api') src = 'Atualizado agora pela API.';
+    else if (gamesState.failed) src = 'Não foi possível consultar a API. Mostrando dados salvos em ' + SNAPSHOT.savedAt + '.';
+    else src = 'Dados salvos em ' + SNAPSHOT.savedAt + '.';
+    srcEl.textContent = src + ' ' + next.length + ' próximos · ' + past.length + ' resultados.';
+  }
+  async function loadGames() {
+    var raw = SNAPSHOT.games, source = 'snapshot', failed = false;
+    if (CRUZEIRO_API.url) {
+      try {
+        var r = await fetch(CRUZEIRO_API.url, { headers: CRUZEIRO_API.headers });
+        if (!r.ok) throw new Error('http ' + r.status);
+        var arr = CRUZEIRO_API.adapter(await r.json());
+        if (!arr.length) throw new Error('vazio');
+        raw = arr; source = 'api';
+      } catch (e) { failed = true; }
+    }
+    gamesState.list = raw.map(normalize);
+    gamesState.source = source; gamesState.failed = failed;
+    renderGames();
+  }
+  bindSeg('cruSeg', function (f) { gamesState.filter = f; renderGames(); });
+  loadGames();
+
+  /* ---------- Temporada de F1 ---------- */
+  /* Para dados ao vivo, troque F1_SNAPSHOT por uma chamada a uma API de F1 (ex.: Jolpica/Ergast) na mesma estrutura.
+     Retrato salvo em 10/11/2026, com resultados até o GP de São Paulo.
+     d = data local da corrida (sem horário), utc = início (só corridas futuras), p = pódio, pole = pole position. */
+  var DRV = {
+    ant: 'Kimi Antonelli', rus: 'George Russell', ham: 'Lewis Hamilton', lec: 'Charles Leclerc', nor: 'Lando Norris',
+    pia: 'Oscar Piastri', ver: 'Max Verstappen', had: 'Isack Hadjar', gas: 'Pierre Gasly'
+  };
+  var F1_SNAPSHOT = {
+    savedAt: '10/11/2026',
+    races: [
+      { rd: 1, gp: 'GP da Austrália', at: 'Albert Park, Melbourne, Austrália', d: '2026-03-08', p: ['rus', 'ant', 'lec'], pole: 'rus' },
+      { rd: 2, gp: 'GP da China', at: 'Circuito Internacional de Xangai, China', d: '2026-03-15', p: ['ant', 'rus', 'ham'], pole: 'ant' },
+      { rd: 3, gp: 'GP do Japão', at: 'Suzuka, Japão', d: '2026-03-29', p: ['ant', 'pia', 'lec'], pole: 'ant' },
+      { rd: 4, gp: 'GP de Miami', at: 'Miami International Autodrome, EUA', d: '2026-05-03', p: ['ant', 'nor', 'pia'], pole: 'ant' },
+      { rd: 5, gp: 'GP do Canadá', at: 'Circuito Gilles Villeneuve, Montreal, Canadá', d: '2026-05-24', p: ['ant', 'ham', 'ver'], pole: 'rus' },
+      { rd: 6, gp: 'GP de Mônaco', at: 'Circuito de Monte Carlo, Mônaco', d: '2026-06-07', p: ['ant', 'ham', 'had'], pole: 'ant' },
+      { rd: 7, gp: 'GP de Barcelona-Catalunha', at: 'Circuit de Barcelona-Catalunya, Espanha', d: '2026-06-14', p: ['ham', 'rus', 'nor'], pole: 'rus' },
+      { rd: 8, gp: 'GP da Áustria', at: 'Red Bull Ring, Spielberg, Áustria', d: '2026-06-28', p: ['rus', 'ver', 'ant'], pole: 'rus' },
+      { rd: 9, gp: 'GP da Grã-Bretanha', at: 'Silverstone, Reino Unido', d: '2026-07-05', p: ['lec', 'rus', 'ham'], pole: 'ant' },
+      { rd: 10, gp: 'GP da Bélgica', at: 'Spa-Francorchamps, Bélgica', d: '2026-07-19', p: ['ant', 'lec', 'ver'], pole: 'ant' },
+      { rd: 11, gp: 'GP da Hungria', at: 'Hungaroring, Budapeste, Hungria', d: '2026-07-26', p: ['nor', 'ver', 'ant'], pole: 'nor' },
+      { rd: 12, gp: 'GP dos Países Baixos', at: 'Zandvoort, Países Baixos', d: '2026-08-23', p: ['nor', 'ant', 'rus'], pole: 'nor' },
+      { rd: 13, gp: 'GP da Itália', at: 'Autódromo de Monza, Itália', d: '2026-09-06', p: ['ant', 'rus', 'ver'], pole: 'gas' },
+      { rd: 14, gp: 'GP da Espanha', at: 'Madring, Madri, Espanha', d: '2026-09-13', p: ['ant', 'ver', 'nor'], pole: 'nor' },
+      { rd: 15, gp: 'GP do Azerbaijão', at: 'Baku City Circuit, Azerbaijão', d: '2026-09-26', p: ['rus', 'ver', 'had'], pole: 'rus' },
+      { rd: 16, gp: 'GP do Bahrein', at: 'Sepang International Circuit, Malásia', d: '2026-10-04', p: ['ver', 'ant', 'ham'], pole: 'ver' },
+      { rd: 17, gp: 'GP de Singapura', at: 'Marina Bay, Singapura', d: '2026-10-11', p: ['ver', 'lec', 'ant'], pole: 'ver' },
+      { rd: 18, gp: 'GP dos Estados Unidos', at: 'Circuit of the Americas, Austin, EUA', d: '2026-10-25', p: ['ant', 'lec', 'ver'], pole: 'ant' },
+      { rd: 19, gp: 'GP do México', at: 'Autódromo Hermanos Rodríguez, Cidade do México', d: '2026-11-01', p: ['ver', 'ham', 'ant'], pole: 'ham' },
+      { rd: 20, gp: 'GP de São Paulo', at: 'Autódromo de Interlagos, São Paulo, Brasil', d: '2026-11-08', p: ['nor', 'ver', 'had'], pole: 'nor' },
+      { rd: 21, gp: 'GP de Las Vegas', at: 'Las Vegas Strip Circuit, EUA', utc: '2026-11-22T04:00:00Z', note: 'Corrida no sábado à noite no horário local (21/11, 20h).' },
+      { rd: 22, gp: 'GP do Catar', at: 'Lusail International Circuit, Catar', utc: '2026-11-29T16:00:00Z' },
+      { rd: 23, gp: 'GP de Abu Dhabi', at: 'Yas Marina, Abu Dhabi, Emirados Árabes', utc: '2026-12-06T13:00:00Z' }
+    ],
+    drivers: [
+      ['Kimi Antonelli', 390], ['Max Verstappen', 279], ['George Russell', 262], ['Lewis Hamilton', 261], ['Charles Leclerc', 249],
+      ['Lando Norris', 246], ['Oscar Piastri', 152], ['Isack Hadjar', 122], ['Liam Lawson', 89], ['Pierre Gasly', 42],
+      ['Arvid Lindblad', 38], ['Franco Colapinto', 27], ['Oliver Bearman', 23], ['Gabriel Bortoleto', 14], ['Nico Hülkenberg', 14],
+      ['Esteban Ocon', 7], ['Fernando Alonso', 7], ['Carlos Sainz', 7], ['Alexander Albon', 5], ['Yuki Tsunoda', 1],
+      ['Ryo Hirakawa', 1], ['Lance Stroll', 0], ['Valtteri Bottas', 0], ['Sergio Pérez', 0], ['Rafael Câmara', 0]
+    ],
+    teams: [
+      ['Mercedes', 652], ['Ferrari', 510], ['Red Bull', 415], ['McLaren', 398], ['Racing Bulls', 114], ['Alpine', 69],
+      ['Haas', 31], ['Audi', 28], ['Williams', 12], ['Aston Martin', 7], ['Cadillac', 0]
+    ],
+    champion: 'Kimi Antonelli',
+    standingsAfter: 'GP de São Paulo'
+  };
+
+  function normRace(r) {
+    var ms = r.utc ? Date.parse(r.utc) : Date.parse(r.d + 'T15:00:00Z');
+    var p = dparts(ms);
+    return {
+      ms: ms, day: p.day, mon: p.mon, wd: p.wd, time: r.utc ? p.time : null,
+      rd: r.rd, gp: r.gp, at: r.at, note: r.note || '',
+      done: !!r.p,
+      podium: (r.p || []).map(function (k, i) { return { pos: (i + 1) + 'º', who: DRV[k], pole: r.pole === k }; }),
+      poleName: r.pole ? DRV[r.pole] : ''
+    };
+  }
+
+  var f1State = { list: [], filter: 'next', showAll: false };
+  var f1El = document.getElementById('f1List');
+  var f1Stand = document.getElementById('f1Stand');
+  var f1Src = document.getElementById('f1Src');
+  var f1Note = document.getElementById('f1Note');
+
+  function standTable(title, head, data, opts) {
+    var box = el('div', 'inset');
+    box.appendChild(el('h4', '', title));
+    var wrap = el('div', 'tbl');
+    var tb = document.createElement('table');
+    var th = document.createElement('thead'), hr = document.createElement('tr');
+    head.forEach(function (h, i) { var c = el('th', i === head.length - 1 ? 'n' : '', h); hr.appendChild(c); });
+    th.appendChild(hr); tb.appendChild(th);
+    var body = document.createElement('tbody');
+    data.forEach(function (row, i) {
+      var tr = document.createElement('tr');
+      if (opts.limit && i >= opts.limit && !f1State.showAll) tr.hidden = true;
+      tr.appendChild(el('td', 'n', String(i + 1)));
+      var nm = el('td', '', row[0]);
+      if (opts.champ && row[0] === opts.champ) nm.appendChild(el('span', 'champ', 'Campeão'));
+      tr.appendChild(nm);
+      tr.appendChild(el('td', 'n', String(row[1])));
+      body.appendChild(tr);
+    });
+    tb.appendChild(body); wrap.appendChild(tb); box.appendChild(wrap);
+    if (opts.limit && data.length > opts.limit) {
+      var tg = el('button', 'btn', f1State.showAll ? 'Mostrar menos' : 'Mostrar todos (' + data.length + ')');
+      tg.type = 'button';
+      tg.addEventListener('click', function () { f1State.showAll = !f1State.showAll; renderF1(); });
+      box.appendChild(tg);
+    }
+    return box;
+  }
+
+  function renderF1() {
+    var now = Date.now();
+    var all = f1State.list;
+    var next = all.filter(function (r) { return !r.done; }).sort(function (a, b) { return a.ms - b.ms; });
+    var past = all.filter(function (r) { return r.done; }).sort(function (a, b) { return b.ms - a.ms; });
+    var f = f1State.filter;
+    var stand = f === 'stand';
+    f1El.hidden = stand; f1Stand.hidden = !stand;
+    f1Src.textContent = 'Dados salvos em ' + F1_SNAPSHOT.savedAt + '. ' + next.length + ' próximas · ' + past.length + ' resultados.';
+    f1Note.textContent = stand
+      ? 'Classificação após o ' + F1_SNAPSHOT.standingsAfter + '.'
+      : 'Horários de Brasília. Corridas já realizadas mostram só a data.';
+
+    if (stand) {
+      f1Stand.textContent = '';
+      f1Stand.appendChild(standTable('Pilotos', ['Pos', 'Piloto', 'Pontos'], F1_SNAPSHOT.drivers, { limit: 10, champ: F1_SNAPSHOT.champion }));
+      f1Stand.appendChild(standTable('Construtores', ['Pos', 'Equipe', 'Pontos'], F1_SNAPSHOT.teams, {}));
+      return;
+    }
+
+    var items;
+    if (f === 'next') items = next;
+    else if (f === 'past') items = past;
+    else items = all.slice().sort(function (a, b) { return a.ms - b.ms; });
+    f1El.textContent = '';
+    if (!items.length) {
+      var li0 = el('li', 'game'); li0.style.gridTemplateColumns = 'minmax(0, 1fr)';
+      li0.appendChild(el('p', 'g-meta', 'Nenhuma corrida nesta lista.')); f1El.appendChild(li0);
+    }
+    items.forEach(function (r) {
+      var li = el('li', 'game' + (!r.done && r === next[0] ? ' is-next' : ''));
+      var m = el('div', 'g-main');
+      m.appendChild(el('h3', '', r.gp));
+      var parts = [];
+      if (r.time) parts.push(r.time);
+      parts.push(r.at);
+      m.appendChild(el('p', 'g-meta', parts.join(' · ')));
+      if (r.done) {
+        m.appendChild(listBlock('Pódio', r.podium.map(function (x) { return { a: x.pos, b: x.who, c: x.pole ? 'pole' : '', mine: x.pos === '1º' }; })));
+      }
+      if (r.note) m.appendChild(el('p', 'g-meta', r.note));
+      var side = el('div', 'g-side');
+      side.appendChild(el('span', 'chip rd', 'Rodada ' + r.rd));
+      if (!r.done && r === next[0]) {
+        var diff = Math.round(brDay(r.ms) - brDay(now));
+        side.appendChild(el('span', 'g-next', diff <= 0 ? 'Próxima corrida: hoje' : diff === 1 ? 'Próxima corrida: amanhã' : 'Próxima corrida: em ' + diff + ' dias'));
+      }
+      li.appendChild(dateCol(r)); li.appendChild(m); li.appendChild(side);
+      f1El.appendChild(li);
+    });
+  }
+  f1State.list = F1_SNAPSHOT.races.map(normRace);
+  bindSeg('f1Seg', function (f) { f1State.filter = f; renderF1(); });
+  renderF1();
+
+  /* ---------- Skills: baú ---------- */
+  /* Para adicionar ou trocar uma skill, edite SKILLS: n = nome, c = categoria (linha cinza da dica),
+     m = sigla de 1 a 3 letras desenhada no ícone, col = cor do ícone.
+     Para usar um logo oficial, adicione img: 'data:image/png;base64,...' no item. */
+  var SKILLS = [
+    { n: 'Python', c: 'Linguagem', m: 'PY', col: '#3572a5' },
+    { n: 'Java', c: 'Linguagem', m: 'JV', col: '#b0572b' },
+    { n: 'JavaScript', c: 'Linguagem', m: 'JS', col: '#b89a14' },
+    { n: 'TypeScript', c: 'Linguagem', m: 'TS', col: '#2f74c0' },
+    { n: 'SQL', c: 'Linguagem', m: 'SQ', col: '#6a4c93' },
+    { n: 'C', c: 'Linguagem', m: 'C', col: '#555e9e' },
+    { n: 'React', c: 'Biblioteca web', m: 'RX', col: '#1f8aa8' },
+    { n: 'Node.js', c: 'Ambiente de execução', m: 'NO', col: '#4a8a2f' },
+    { n: 'HTML e CSS', c: 'Web', m: 'H5', col: '#c0502d' },
+    { n: 'Spring', c: 'Framework', m: 'SP', col: '#3d8b3d' },
+    { n: 'Git', c: 'Ferramenta', m: 'GT', col: '#c14a2a' },
+    { n: 'Docker', c: 'Ferramenta', m: 'DK', col: '#2a7ab8' },
+    { n: 'Linux', c: 'Sistema operacional', m: 'LX', col: '#444444' },
+    { n: 'PostgreSQL', c: 'Banco de dados', m: 'PG', col: '#336791' }
+  ];
+
+  var GLYPH = {
+    A: ['.#.', '#.#', '###', '#.#', '#.#'], B: ['##.', '#.#', '##.', '#.#', '##.'], C: ['.##', '#..', '#..', '#..', '.##'],
+    D: ['##.', '#.#', '#.#', '#.#', '##.'], E: ['###', '#..', '##.', '#..', '###'], F: ['###', '#..', '##.', '#..', '#..'],
+    G: ['.##', '#..', '#.#', '#.#', '.##'], H: ['#.#', '#.#', '###', '#.#', '#.#'], I: ['###', '.#.', '.#.', '.#.', '###'],
+    J: ['..#', '..#', '..#', '#.#', '.#.'], K: ['#.#', '#.#', '##.', '#.#', '#.#'], L: ['#..', '#..', '#..', '#..', '###'],
+    M: ['#.#', '###', '###', '#.#', '#.#'], N: ['###', '#.#', '#.#', '#.#', '#.#'], O: ['###', '#.#', '#.#', '#.#', '###'],
+    P: ['###', '#.#', '###', '#..', '#..'], Q: ['###', '#.#', '#.#', '###', '..#'], R: ['##.', '#.#', '##.', '#.#', '#.#'],
+    S: ['.##', '#..', '.#.', '..#', '##.'], T: ['###', '.#.', '.#.', '.#.', '.#.'], U: ['#.#', '#.#', '#.#', '#.#', '###'],
+    V: ['#.#', '#.#', '#.#', '#.#', '.#.'], W: ['#.#', '#.#', '###', '###', '#.#'], X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
+    Y: ['#.#', '#.#', '.#.', '.#.', '.#.'], Z: ['###', '..#', '.#.', '#..', '###'],
+    '0': ['###', '#.#', '#.#', '#.#', '###'], '1': ['.#.', '##.', '.#.', '.#.', '###'], '2': ['###', '..#', '###', '#..', '###'],
+    '3': ['###', '..#', '###', '..#', '###'], '4': ['#.#', '#.#', '###', '..#', '..#'], '5': ['###', '#..', '###', '..#', '###'],
+    '6': ['###', '#..', '###', '#.#', '###'], '7': ['###', '..#', '..#', '.#.', '.#.'], '8': ['###', '#.#', '###', '#.#', '###'],
+    '9': ['###', '#.#', '###', '..#', '###']
+  };
+
+  function mul(hex, k) {
+    var n = parseInt(hex.slice(1), 16);
+    function ch(v) { return Math.max(0, Math.min(255, Math.round(v * k))); }
+    return 'rgb(' + ch((n >> 16) & 255) + ',' + ch((n >> 8) & 255) + ',' + ch(n & 255) + ')';
+  }
+  function sprite(it) {
+    var c = document.createElement('canvas');
+    c.width = 16; c.height = 16; c.className = 'item';
+    var g = c.getContext('2d');
+    if (it.img) {
+      var im = new Image();
+      im.onload = function () { g.imageSmoothingEnabled = false; g.drawImage(im, 0, 0, 16, 16); };
+      im.src = it.img;
+      return c;
+    }
+    function r(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
+    r(1, 0, 14, 16, '#14110f'); r(0, 1, 16, 14, '#14110f');
+    r(1, 1, 14, 14, it.col);
+    r(1, 1, 14, 1, mul(it.col, 1.28)); r(1, 1, 1, 14, mul(it.col, 1.28));
+    r(1, 14, 14, 1, mul(it.col, 0.68)); r(14, 1, 1, 14, mul(it.col, 0.68));
+    var m = it.m, w = m.length * 4 - 1, x0 = Math.round((16 - w) / 2), y0 = 5;
+    for (var pass = 0; pass < 2; pass++) {
+      var off = pass === 0 ? 1 : 0, col = pass === 0 ? 'rgba(0,0,0,.55)' : '#ffffff';
+      for (var i = 0; i < m.length; i++) {
+        var gl = GLYPH[m[i]]; if (!gl) continue;
+        for (var dy = 0; dy < 5; dy++) for (var dx = 0; dx < 3; dx++) if (gl[dy].charAt(dx) === '#') r(x0 + i * 4 + dx + off, y0 + dy + off, 1, 1, col);
+      }
+    }
+    return c;
+  }
+
+  /* --- cena 3D: slab de madeira, baú e placa --- */
+  function CU(n) { return 'calc(var(--u) * ' + n + ')'; }
+  function tex(w, h, k, fn) {
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    var g = c.getContext('2d');
+    function px(x, y, col) { g.fillStyle = col.charAt(0) === '#' ? mul(col, k) : col; g.fillRect(x, y, 1, 1); }
+    fn(px, w, h);
+    return c.toDataURL();
+  }
+  function wood(px, w, h, pal, seed) {
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var n = hash(x * 31 + y * 17 + seed * 101) % 7;
+      var col = n === 0 ? pal[1] : n === 1 ? pal[2] : pal[0];
+      if (y % 4 === 3) col = pal[3];
+      else if (x === ((Math.floor(y / 4)) * 5 + seed * 3) % w) col = pal[3];
+      px(x, y, col);
+    }
+  }
+  function outline(px, w, h, col) {
+    for (var x = 0; x < w; x++) { px(x, 0, col); px(x, h - 1, col); }
+    for (var y = 0; y < h; y++) { px(0, y, col); px(w - 1, y, col); }
+  }
+  function drawText(px, str, x0, y0, col) {
+    for (var i = 0; i < str.length; i++) {
+      var gl = GLYPH[str.charAt(i)]; if (!gl) continue;
+      for (var dy = 0; dy < 5; dy++) for (var dx = 0; dx < 3; dx++) if (gl[dy].charAt(dx) === '#') px(x0 + i * 4 + dx, y0 + dy, col);
+    }
+  }
+  function texSet(w, h, d, paint) {
+    var K = { front: 1, back: 0.8, left: 0.82, right: 0.86, top: 1.12, bottom: 0.6 };
+    var dims = { front: [w, h], back: [w, h], left: [d, h], right: [d, h], top: [w, d], bottom: [w, d] };
+    var o = {};
+    Object.keys(K).forEach(function (f) {
+      o[f] = tex(dims[f][0], dims[f][1], K[f], function (px) { paint(f, px, dims[f][0], dims[f][1]); });
+    });
+    return o;
+  }
+  function face(b, name, w, h, left, top, tf, src) {
+    var f = el('div', 'f3 f-' + name);
+    f.style.width = CU(w); f.style.height = CU(h); f.style.left = CU(left); f.style.top = CU(top); f.style.transform = tf;
+    if (src) { f.style.backgroundImage = 'url("' + src + '")'; f.style.transform = tf + ' scale(1.02)'; }
+    b.appendChild(f); return f;
+  }
+  function box(w, h, d, t) {
+    var b = el('div', 'b3');
+    b.style.width = CU(w); b.style.height = CU(h);
+    b.style.left = CU(-w / 2); b.style.top = CU(-h / 2);
+    var hw = CU(w / 2), hh = CU(h / 2), hd = CU(d / 2);
+    face(b, 'front', w, h, 0, 0, 'translateZ(' + hd + ')', t.front);
+    face(b, 'back', w, h, 0, 0, 'rotateY(180deg) translateZ(' + hd + ')', t.back);
+    face(b, 'right', d, h, (w - d) / 2, 0, 'rotateY(90deg) translateZ(' + hw + ')', t.right);
+    face(b, 'left', d, h, (w - d) / 2, 0, 'rotateY(-90deg) translateZ(' + hw + ')', t.left);
+    face(b, 'top', w, d, 0, (h - d) / 2, 'rotateX(90deg) translateZ(' + hh + ')', t.top);
+    face(b, 'bottom', w, d, 0, (h - d) / 2, 'rotateX(-90deg) translateZ(' + hh + ')', t.bottom);
+    return b;
+  }
+  function place(b, x, y, z) { b.style.transform = 'translate3d(' + CU(x) + ', ' + CU(-y) + ', ' + CU(z) + ')'; return b; }
+
+  var OAK = ['#bc9862', '#b08c58', '#c8a46c', '#8a6a3a'];
+  var CHEST = ['#9a6a33', '#8d5f2b', '#a77539', '#5a3a17'];
+  var DARK = ['#7a5a33', '#6d4f2b', '#86643a', '#4a3319'];
+
+  function buildChest() {
+    var world = document.getElementById('world');
+    var sh = el('div', 'ground-shadow'); world.appendChild(sh);
+
+    var slab = box(16, 8, 16, texSet(16, 8, 16, function (f, px, w, h) { wood(px, w, h, OAK, f.length); }));
+    world.appendChild(place(slab, 0, 4, 0));
+
+    var body = box(14, 9, 14, texSet(14, 9, 14, function (f, px, w, h) {
+      if (f === 'top') {
+        for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) px(x, y, hash(x * 13 + y * 29) % 6 === 0 ? '#3a2410' : '#2a190b');
+        outline(px, w, h, '#6a4620');
+        return;
+      }
+      wood(px, w, h, CHEST, f.length + 3); outline(px, w, h, '#3b2410');
+      if (f === 'front') { px(6, 0, '#cfcfcf'); px(7, 0, '#cfcfcf'); px(6, 1, '#9a9a9a'); px(7, 1, '#9a9a9a'); px(6, 2, '#222222'); px(7, 2, '#555555'); }
+    }));
+    world.appendChild(place(body, 0, 12.5, 0));
+    var glow = face(body, 'glow', 14, 14, 0, -2.5, 'rotateX(90deg) translateZ(' + CU(4.55) + ')', null);
+    glow.className = 'f3 glow';
+
+    var lid = box(14, 5, 14, texSet(14, 5, 14, function (f, px, w, h) {
+      if (f === 'top') { wood(px, w, h, CHEST, 9); outline(px, w, h, '#3b2410'); return; }
+      if (f === 'bottom') { wood(px, w, h, DARK, 5); outline(px, w, h, '#2a190b'); return; }
+      wood(px, w, h, CHEST, f.length + 7); outline(px, w, h, '#3b2410');
+      if (f === 'front') { px(6, 3, '#9a9a9a'); px(7, 3, '#9a9a9a'); px(6, 4, '#cfcfcf'); px(7, 4, '#cfcfcf'); }
+    }));
+    lid.classList.add('lid');
+    lid.style.setProperty('--lid-pos', 'translate3d(0px, ' + CU(-19.45) + ', 0px)');
+    world.appendChild(lid);
+
+    var post = box(2, 7, 2, texSet(2, 7, 2, function (f, px, w, h) { wood(px, w, h, DARK, 2); }));
+    world.appendChild(place(post, -22, 3.5, 3));
+    var bt = texSet(14, 7, 1, function (f, px, w, h) { wood(px, w, h, OAK, 4); outline(px, w, h, '#6f5129'); });
+    bt.front = tex(28, 14, 1, function (px, w, h) {
+      wood(px, w, h, OAK, 6); outline(px, w, h, '#6f5129');
+      drawText(px, 'SKILLS', 2, 4, '#2b1a0c');
+    });
+    world.appendChild(place(box(14, 7, 1, bt), -22, 10.5, 3.5));
+  }
+  buildChest();
+
+  /* --- fundo da sala do baú (pixel art desenhada no canvas) --- */
+  (function room() {
+    var room = document.getElementById('chestRoom'), cv = document.getElementById('roomBg');
+    var tgA = document.getElementById('tgA'), tgB = document.getElementById('tgB');
+    var PX = 4, drawn = '';
+    function pick(a, n) { return a[hash(n) % a.length]; }
+    function paint() {
+      var W = room.clientWidth, H = room.clientHeight; if (!W || !H) return;
+      var key = W + 'x' + H; if (key === drawn) return; drawn = key;
+      var w = Math.ceil(W / PX), h = Math.ceil(H / PX); cv.width = w; cv.height = h;
+      var c = cv.getContext('2d'), wallEnd = Math.round(h * 0.56), trim = 3;
+      function r(x, y, ww, hh, col) { c.fillStyle = col; c.fillRect(x, y, ww, hh); }
+      var STONE = ['#7f7f7f', '#767676', '#898989', '#707070'], PLANK = ['#4d3720', '#44301b', '#573e24', '#3d2a17'];
+      // parede de tijolos de pedra
+      var BH = 6, BW = 12;
+      for (var row = 0, y = 0; y < wallEnd; row++, y += BH) {
+        var off = (row % 2) * (BW / 2);
+        for (var x = -off; x < w; x += BW) {
+          var col = pick(STONE, row * 97 + x * 31 + 7);
+          r(x, y, BW, BH, col);
+          for (var k = 0; k < 4; k++) r(x + hash(row * 11 + x + k * 5) % (BW - 1), y + hash(row * 7 + x * 3 + k) % (BH - 1), 1, 1, hash(k + x + row) % 2 ? '#8f8f8f' : '#6a6a6a');
+          r(x, y, BW, 1, '#929292'); r(x, y + BH - 1, BW, 1, '#555555'); r(x + BW - 1, y, 1, BH, '#5a5a5a');
+        }
+      }
+      // rodapé de carvalho escuro
+      r(0, wallEnd, w, trim, '#2e1f10'); r(0, wallEnd, w, 1, '#5b3f20');
+      // piso de tábuas
+      var PH = 7;
+      for (var ry = wallEnd + trim, pr = 0; ry < h; ry += PH, pr++) {
+        for (var px = -(hash(pr * 13) % 24); px < w; px += 24) {
+          var pw = 24;
+          r(px, ry, pw, PH, pick(PLANK, pr * 53 + px * 7));
+          for (var g = 0; g < 5; g++) r(px + 1 + hash(pr * 17 + g * 9 + px) % (pw - 3), ry + 1 + hash(pr + g * 3 + px) % (PH - 3), 2, 1, '#38271a');
+          r(px, ry, pw, 1, '#5e4528'); r(px, ry + PH - 1, pw, 1, '#2b1d10'); r(px + pw - 1, ry, 1, PH, '#2b1d10');
+        }
+      }
+      // sombra do rodapé no piso
+      r(0, wallEnd + trim, w, 2, 'rgba(0,0,0,.35)'); r(0, wallEnd + trim + 2, w, 2, 'rgba(0,0,0,.18)');
+      // tochas
+      function torch(cx, cy) {
+        r(cx - 1, cy, 2, 8, '#6b4a22'); r(cx - 1, cy, 1, 8, '#8a6330'); r(cx - 1, cy + 7, 2, 1, '#3d2a12');
+        r(cx - 2, cy - 3, 4, 3, '#ff9d1a'); r(cx - 1, cy - 4, 2, 2, '#ffd24a'); r(cx - 1, cy - 2, 2, 2, '#fff2a0');
+        r(cx - 3, cy - 1, 1, 2, '#e8690f'); r(cx + 2, cy - 1, 1, 2, '#e8690f');
+        r(cx - 3, cy + 8, 6, 1, 'rgba(0,0,0,.25)');
+      }
+      var ty = Math.round(wallEnd * 0.34), ax = Math.round(w * 0.12), bx = Math.round(w * 0.88);
+      torch(ax, ty); torch(bx, ty);
+      tgA.style.left = (ax * PX) + 'px'; tgA.style.top = ((ty - 2) * PX) + 'px';
+      tgB.style.left = (bx * PX) + 'px'; tgB.style.top = ((ty - 2) * PX) + 'px';
+      cv.style.width = '100%'; cv.style.height = '100%';
+    }
+    paint();
+    if (window.ResizeObserver) new ResizeObserver(paint).observe(room); else window.addEventListener('resize', paint);
+  })();
+
+  /* --- inventário do baú --- */
+  var tip = document.getElementById('mcTip'), tipName = document.getElementById('tipName'), tipLore = document.getElementById('tipLore');
+  var tipTimer = null;
+  function placeTip(x, y) {
+    var w = tip.offsetWidth, h = tip.offsetHeight;
+    var l = x + 16, t = y - h - 8;
+    if (l + w > window.innerWidth - 8) l = x - w - 16;
+    if (l < 8) l = 8;
+    if (t < 8) t = y + 22;
+    tip.style.left = l + 'px'; tip.style.top = t + 'px';
+  }
+  function showTip(it, x, y) {
+    tipName.textContent = it.n; tipLore.textContent = it.c; tip.hidden = false; placeTip(x, y);
+  }
+  function hideTip() { tip.hidden = true; clearTimeout(tipTimer); }
+
+  function mkSlot(it) {
+    if (!it) return el('div', 'mslot');
+    var b = el('button', 'mslot');
+    b.type = 'button';
+    b.setAttribute('aria-label', it.n + ', ' + it.c);
+    b.appendChild(sprite(it));
+    b.addEventListener('pointerenter', function (e) { if (e.pointerType !== 'touch') showTip(it, e.clientX, e.clientY); });
+    b.addEventListener('pointermove', function (e) { if (e.pointerType !== 'touch' && !tip.hidden) placeTip(e.clientX, e.clientY); });
+    b.addEventListener('pointerleave', hideTip);
+    b.addEventListener('focus', function () { var r = b.getBoundingClientRect(); showTip(it, r.left + r.width / 2, r.top); });
+    b.addEventListener('blur', hideTip);
+    b.addEventListener('click', function (e) {
+      var r = b.getBoundingClientRect();
+      showTip(it, r.left + r.width / 2, r.top);
+      clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 2600);
+    });
+    return b;
+  }
+  function fillGrid(id, count, withItems) {
+    var g = document.getElementById(id);
+    for (var i = 0; i < count; i++) g.appendChild(mkSlot(withItems ? SKILLS[i] : null));
+  }
+  fillGrid('chestGrid', 27, true);
+
+  var scene = document.getElementById('chestScene'), chestBtn = document.getElementById('chestBtn');
+  var modal = document.getElementById('chestModal'), closeBtn = document.getElementById('chestClose');
+  var chestOpen = false, openTimer = null;
+  function showGui() {
+    if (!chestOpen) return;
+    modal.hidden = false; root.classList.add('modal-open'); closeBtn.focus();
+  }
+  function openChest() {
+    if (chestOpen) return;
+    chestOpen = true; scene.classList.add('open'); chestBtn.setAttribute('aria-expanded', 'true');
+    clearTimeout(openTimer); openTimer = setTimeout(showGui, rm.matches ? 0 : 750);
+  }
+  function closeChest() {
+    if (!chestOpen) return;
+    chestOpen = false; clearTimeout(openTimer); hideTip();
+    modal.hidden = true; root.classList.remove('modal-open');
+    scene.classList.remove('open'); chestBtn.setAttribute('aria-expanded', 'false');
+    try { chestBtn.focus({ preventScroll: true }); } catch (e) { chestBtn.focus(); }
+  }
+  chestBtn.addEventListener('click', openChest);
+  chestBtn.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openChest(); } });
+  closeBtn.addEventListener('click', closeChest);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeChest(); });
+  document.addEventListener('keydown', function (e) {
+    if (!chestOpen) return;
+    if (e.key === 'Escape' || e.key === 'e' || e.key === 'E') { e.preventDefault(); closeChest(); return; }
+    if (e.key === 'Tab' && !modal.hidden) {
+      var f = Array.prototype.slice.call(modal.querySelectorAll('button'));
+      if (!f.length) return;
+      var first = f[0], lastEl = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); lastEl.focus(); }
+      else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); first.focus(); }
+    }
+  });
+})();
+</script>
+
+</body></html>
